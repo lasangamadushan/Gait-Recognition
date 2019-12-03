@@ -75,6 +75,35 @@ void printKeypoints(const std::shared_ptr<std::vector<std::shared_ptr<op::Datum>
     }
 }
 
+bool validateDatum(const std::shared_ptr<std::vector<std::shared_ptr<op::Datum>>>& datumsPtr) {
+	int noneZeroCount = 0;
+	int max = -1;
+	for (int i = 0; i < datumsPtr->at(0)->poseKeypoints.getVolume(); i++) {
+		if (datumsPtr->at(0)->poseKeypoints.at(i) != 0) {
+			noneZeroCount++;
+		}
+		if (i % 3 == 0) {
+			if (max < datumsPtr->at(0)->poseKeypoints.at(i)) {
+				max = datumsPtr->at(0)->poseKeypoints.at(i);
+			}
+		}
+	}
+	
+	std::cout << "None Zero Count: " << noneZeroCount << std::endl;
+
+	if (noneZeroCount > 45) {
+		if (max < 1200) {
+			return true;
+		}
+		else {
+			return false;
+		}
+	}
+	else {
+		return false;
+	}
+}
+
 int cgetWidth(const std::shared_ptr<std::vector<std::shared_ptr<op::Datum>>>& datumsPtr) {
 	std::cout << "get width, array size: " << datumsPtr->at(0)->poseKeypoints.getVolume() << std::endl;
 	int max = -1;
@@ -121,9 +150,9 @@ int getWidth(const std::shared_ptr<std::vector<std::shared_ptr<op::Datum>>>& dat
 		int width = datumsPtr->at(0)->poseKeypoints.at(lowL) - datumsPtr->at(0)->poseKeypoints.at(lowH);
 		std::cout << "lowest points : " << maxH << "  " << maxL << std::endl;
 		std::cout << "width: " << std::abs(width) << std::endl;
-		/*const cv::Mat cvMat = OP_OP2CVCONSTMAT(datumsPtr->at(0)->cvOutputData);
-		op::opLog("Body keypoints: " + datumsPtr->at(0)->poseKeypoints.toString(), op::Priority::High);
-		cv::circle(cvMat, cv::Point(datumsPtr->at(0)->poseKeypoints.at(lowL), datumsPtr->at(0)->poseKeypoints.at(lowL + 1)), 30, cv::Scalar(255, 0, 0), 10);
+		const cv::Mat cvMat = OP_OP2CVCONSTMAT(datumsPtr->at(0)->cvOutputData);
+		//op::opLog("Body keypoints: " + datumsPtr->at(0)->poseKeypoints.toString(), op::Priority::High);
+		/*cv::circle(cvMat, cv::Point(datumsPtr->at(0)->poseKeypoints.at(lowL), datumsPtr->at(0)->poseKeypoints.at(lowL + 1)), 30, cv::Scalar(255, 0, 0), 10);
 		cv::circle(cvMat, cv::Point(datumsPtr->at(0)->poseKeypoints.at(lowH), datumsPtr->at(0)->poseKeypoints.at(lowH + 1)), 30, cv::Scalar(255, 0, 0), 10);
 		cv::imshow(OPEN_POSE_NAME_AND_VERSION + " - Foot Points", cvMat);
 		cv::waitKey(1);*/
@@ -274,6 +303,7 @@ void printImage(const std::shared_ptr<std::vector<std::shared_ptr<op::Datum>>>& 
 int state = 0;
 int s_count = 0;
 bool doneProcessing = false;
+int cycle_count = 1;
 void processData(const std::shared_ptr<std::vector<std::shared_ptr<op::Datum>>>& datumsPtr) {
 	std::cout << "**********************************************************************************************************" << std::endl;
 	std::cout << "processing data, state: " << state << std::endl;
@@ -300,31 +330,45 @@ void processData(const std::shared_ptr<std::vector<std::shared_ptr<op::Datum>>>&
 				state = 3;
 				s_count = 0;
 			}
-			printImage(datumsPtr);
+			if (cycle_count > 0) {
+				printImage(datumsPtr);
+			}
 			break;
 		case 3:
 			if (getDiff(datumsPtr) < 0 && s_count > 0) {
 				state = 4;
 				s_count = 0;
 			}
-			printImage(datumsPtr);
+			if (cycle_count > 0) {
+				printImage(datumsPtr);
+			}
 			break;
 		case 4:
 			if (getDiff(datumsPtr) > 0 && s_count > 0) {
 				state = 5;
 				s_count = 0;
 			}
-			printImage(datumsPtr);
+			if (cycle_count > 0) {
+				printImage(datumsPtr);
+			}
 			break;
 		case 5:
 			if (getDiff(datumsPtr) < 0 && s_count > 0) {
 				state = 6;
 				s_count = 0;
 			}
-			printImage(datumsPtr);
+			if (cycle_count > 0) {
+				printImage(datumsPtr);
+			}
 			break;
 		case 6:
-			doneProcessing = true;
+			cycle_count++;
+			if (cycle_count < 2) {
+				state = 1;
+			}
+			else {
+				doneProcessing = true;
+			}
 			break;
 		default:
 			break;
@@ -348,9 +392,11 @@ void printCSV() {
 	}
 	outfile.close();
 }
+
+bool process_started = false;
 void processVideo(op::Wrapper& opWrapper)
 {
-	cv::VideoCapture cap("C:/Users/Lasanga Madushan/Desktop/openpose/sample1.mp4");
+	cv::VideoCapture cap("C:/Users/Lasanga Madushan/Desktop/openpose/Rajitha2.mp4");
 	std::cout << "start processing video" << std::endl;
 	// Check if camera opened successfully
 	if (!cap.isOpened()) {
@@ -361,9 +407,12 @@ void processVideo(op::Wrapper& opWrapper)
 	while (1) {
 
 		cv::Mat frame;
+		//cv::Mat src;
+
 		// Capture frame-by-frame
 		cap >> frame;
-
+		//cv::Size size(640,360);//the dst image size,e.g.100x100
+		//resize(src, frame, size);//resize image
 		// If the frame is empty, break immediately
 		if (frame.empty() || doneProcessing)
 			break;
@@ -373,8 +422,15 @@ void processVideo(op::Wrapper& opWrapper)
 		auto datumProcessed = opWrapper.emplaceAndPop(frameToProcess);
 		std::cout << "sending to process datum" << std::endl;
 		//printImage(datumProcessed);
-		processData(datumProcessed);
-		//widthList.push_back(getWidth(datumProcessed));
+		//std::cout << validateDatum(datumProcessed) << std::endl;
+		if (!process_started) {
+			process_started = validateDatum(datumProcessed);
+		}
+		if (process_started) {
+			processData(datumProcessed);
+			widthList.push_back(getWidth(datumProcessed));
+		}
+		
 
 			//if (datumProcessed != nullptr)
 			//{
@@ -409,7 +465,7 @@ void processVideo(op::Wrapper& opWrapper)
 
 	// When everything done, release the video capture object
 	cap.release();
-	//printCSV();
+	printCSV();
 }
 
 int tutorialApiCpp()
@@ -456,11 +512,14 @@ int tutorialApiCpp()
     }
 }
 
+//std::string video_file_name;
+
 int main(int argc, char *argv[])
 {
     // Parsing command line flags
     gflags::ParseCommandLineFlags(&argc, &argv, true);
-
+	//video_file_name = argv[1];
+	//std::cout << video_file_name << std::endl;
     // Running tutorialApiCpp
     return tutorialApiCpp();
 }
