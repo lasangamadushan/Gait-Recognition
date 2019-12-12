@@ -1,7 +1,8 @@
 // ----------------------- OpenPose C++ API Tutorial - Example 3 - Body from image -----------------------
 // It reads an image, process it, and displays it with the pose (and optionally hand and face) keypoints. In addition,
 // it includes all the OpenPose configuration flags (enable/disable hand, face, output saving, etc.).
-
+//#include "boost/filesystem.hpp"
+#include <windows.h>
 // Third-party dependencies
 #include <opencv2/opencv.hpp>
 // Command-line user interface
@@ -270,7 +271,10 @@ void configureWrapper(op::Wrapper& opWrapper)
 }
 
 int frameNo = 0;
+std::string outputFolder = "";
+std::list<int> widthList;
 void printImage(const std::shared_ptr<std::vector<std::shared_ptr<op::Datum>>>& datumProcessed) {
+	widthList.push_back(getWidth(datumProcessed));
 	std::cout << "print image, frame No: " << frameNo << std::endl;
 	if (datumProcessed != nullptr)
 	{
@@ -280,7 +284,7 @@ void printImage(const std::shared_ptr<std::vector<std::shared_ptr<op::Datum>>>& 
 			{
 				// Write frame
 				const cv::Mat cvMat = OP_OP2CVCONSTMAT(datumProcessed->at(0)->cvOutputData);
-				std::string fileName = "C:/Users/Lasanga Madushan/Desktop/openpose/sample_out/Frame - " + std::to_string(frameNo) + ".png";
+				std::string fileName = outputFolder+"/Frame - " + std::to_string(frameNo) + ".png";
 				std::cout << fileName << std::endl;
 				cv::Mat greyMat, thr;
 				cv::cvtColor(cvMat, greyMat, cv::COLOR_BGR2GRAY);
@@ -380,7 +384,7 @@ void processData(const std::shared_ptr<std::vector<std::shared_ptr<op::Datum>>>&
 
 
 
-std::list<int> widthList;
+
 
 void printCSV() {
 	int count = 1;
@@ -394,9 +398,10 @@ void printCSV() {
 }
 
 bool process_started = false;
+std::string video_file_name;
 void processVideo(op::Wrapper& opWrapper)
 {
-	cv::VideoCapture cap("C:/Users/Lasanga Madushan/Desktop/openpose/Rajitha2.mp4");
+	cv::VideoCapture cap(video_file_name);
 	std::cout << "start processing video" << std::endl;
 	// Check if camera opened successfully
 	if (!cap.isOpened()) {
@@ -423,14 +428,15 @@ void processVideo(op::Wrapper& opWrapper)
 		std::cout << "sending to process datum" << std::endl;
 		//printImage(datumProcessed);
 		//std::cout << validateDatum(datumProcessed) << std::endl;
+		//widthList.push_back(getWidth(datumProcessed));
+
 		if (!process_started) {
 			process_started = validateDatum(datumProcessed);
 		}
 		if (process_started) {
 			processData(datumProcessed);
-			widthList.push_back(getWidth(datumProcessed));
+			//widthList.push_back(getWidth(datumProcessed));
 		}
-		
 
 			//if (datumProcessed != nullptr)
 			//{
@@ -512,14 +518,26 @@ int tutorialApiCpp()
     }
 }
 
-//std::string video_file_name;
+
 
 int main(int argc, char *argv[])
 {
     // Parsing command line flags
     gflags::ParseCommandLineFlags(&argc, &argv, true);
-	//video_file_name = argv[1];
-	//std::cout << video_file_name << std::endl;
+	video_file_name = argv[1];
+	outputFolder = argv[2];
+	std::cout << "input video: " << video_file_name << std::endl;
+	std::cout << "output folder: " << outputFolder << std::endl;
+	//boost::filesystem::remove_all("poses_over_gait_cycle");
+	//boost::filesystem::create_directory("poses_over_gait_cycle");
+	if (!CreateDirectory(outputFolder.c_str(), NULL)) {
+		if (ERROR_ALREADY_EXISTS == GetLastError()) {
+			std::cout << "folder already exist" << std::endl;
+		}
+		else {
+			std::cout << "Problem with the output images path. Images are not saving...!" << std::endl;
+		}
+	}
     // Running tutorialApiCpp
     return tutorialApiCpp();
 }
